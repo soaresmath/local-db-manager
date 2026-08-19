@@ -2,8 +2,6 @@ import subprocess
 from config import bancos
 
 def verificar_status_servico(servico):
-    resultado = False
-
     try:
         resultado = subprocess.run(
             ["sc", "query", servico],
@@ -13,32 +11,39 @@ def verificar_status_servico(servico):
             timeout=10
         )
     except subprocess.CalledProcessError as erro:
-        print(f"Falha (código {erro.returncode}): {erro.stderr}")
-        return False
-    except subprocess.TimeoutExpired as erro:
-        print("O serviço demorou mais de 10 segundos — abortado.")
-        return False
+        # o raise interrompe a execução e propaga a exceção para quem chamou.
+        # Quem chamou pode tratar o erro com except ou deixar a exceção continuar subindo, como verificar status banco, inicar serviço, parar serviço - nenhum faz isso e deixa com o main
 
-    if resultado:
-        if "STOPPED" in resultado.stdout:
-            status = "STOPPED"
-            return status
+        raise Exception(
+            f"Não foi possivel consultar o status do serviço: {servico}"
+            f"Falha (código {erro.returncode}): {erro.stderr}"
+        )
+    
+    except subprocess.TimeoutExpired as erro:
+        raise Exception(
+            f"O serviço demorou mais de 10 segundos — abortado."
+        )
+        
+    if "STOPPED" in resultado.stdout:
+        status = "STOPPED"
+        return status
                             
-        return "RUNNING"
+    return "RUNNING"
 
 def verificar_status_banco(banco):
     for servico in banco["services"]:
-        status = verificar_status_servico(servico)
 
+        # não tratamos o erro se verificar_status_servico explodir erro e enviar para nós
+        status = verificar_status_servico(servico)
+        
         if status == "STOPPED":
             return "STOPPED"
-        elif status is False:
-            return "Erro na verificação de servico"
-        
+    
     return "RUNNING"
 
 def iniciar_servico(servico):
 
+    # não tratamos o erro se por acaso o verificar status servico explodir erro se enviar para nós, mas tambem mandamos para quem nos acionar 
     if verificar_status_servico(servico) == "STOPPED":
         try:
             resultado = subprocess.run(
@@ -49,23 +54,27 @@ def iniciar_servico(servico):
                 timeout=10
             )
         except subprocess.CalledProcessError as erro:
-            print(f"Falha (código {erro.returncode}): {erro.stderr}")
-            resultado = False
+                raise Exception(
+                    f"Não foi possivel iniciar o serviço: {servico}"
+                    f"Falha (código {erro.returncode}): {erro.stderr}"
+                )
+            
         except subprocess.TimeoutExpired as erro:
-            print("O serviço demorou mais de 10 segundos — abortado.")
-            resultado = False
+                raise Exception(
+                    f"O serviço demorou mais de 10 segundos — abortado."
+                )
+                
     else:
         return True # minha logica é economizar processmento, se um serviço já está ligado, não precisa rodar as camadas abaixa do if
-
-    if resultado:
-        if "START_PENDING" in resultado.stdout:
-            status = verificar_status_servico(servico)
-            if status == "RUNNING":
-                return True
+    
+    if "START_PENDING" in resultado.stdout:
+        status = verificar_status_servico(servico)
+        if status == "RUNNING":
+            return True
         else:
             return False
     else:
-        return "Erro no try e execption - serviço"
+        return False
 
 def iniciar_banco(banco_st):
 
@@ -76,16 +85,20 @@ def iniciar_banco(banco_st):
 
         if banco_dic == banco_st:
             for servico in banco["services"]:
+                    # se o iniciar servico explodir não estamos tratando
                     status = iniciar_servico(servico)
-            
+                    
                     if status is False:
                         return "Erro ao subir banco"
+                            
             return "Banco ok"
-
+        else:
+            ...
     return 'Banco inexistente'
 
 def parar_servico(servico):
 
+    # não tratamos o erro se por acaso o verificar status servico explodir erro se enviar para nós, mas tambem mandamos para quem nos acionar
     if verificar_status_servico(servico) == "RUNNING":
         try:
             resultado = subprocess.run(
@@ -97,11 +110,15 @@ def parar_servico(servico):
             )
 
         except subprocess.CalledProcessError as erro:
-            print(f"Falha (código {erro.returncode}): {erro.stderr}")
-            return False
+                raise Exception(
+                    f"Não foi possivel parar o serviço: {servico}"
+                    f"Falha (código {erro.returncode}): {erro.stderr}"
+                )
+            
         except subprocess.TimeoutExpired as erro:
-            print("O serviço demorou mais de 10 segundos — abortado.")
-            return False
+                raise Exception(
+                    f"O serviço demorou mais de 10 segundos — abortado."
+                )
 
         return True
     else:
@@ -120,6 +137,7 @@ def parar_banco(banco_str):
 
         if banco_dic == banco_str:
            for servicos in banco["services"]:
+                # se algum erro do parar servico fundamental nos enviar nçao estamos tratando
                 retorno = parar_servico(servicos) 
 
                 if retorno == False:
@@ -130,4 +148,4 @@ def parar_banco(banco_str):
            else: 
                 return "Banco parado"
     
-    return 'Banco inexistente' # isso matava a operação, ele conseguia PARA O LOOP DO FOR QUANDO ERA UM ELSE NO IF Da comparação das palavras digitadas e dicionario.
+    return 'Banco inexistente'

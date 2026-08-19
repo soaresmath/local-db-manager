@@ -21,10 +21,14 @@ while programa_ativo:
         case "1":
             print("Banco disponíveis: ")
             print()
-            for banco in bancos:
+            try:
+                for banco in bancos:
 
-                status = verificar_status_banco(banco)
-                print(" - ", banco["name"], "Status:", status)
+                    status = verificar_status_banco(banco)
+                    print(" - ", banco["name"], "Status:", status)
+                    
+            except Exception as erro:
+                print(f"Erro: {erro}")         
 
         case "2":
             print("Você escolheu Iniciar banco")
