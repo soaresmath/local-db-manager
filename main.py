@@ -26,27 +26,34 @@ while programa_ativo:
 
                     status = verificar_status_banco(banco)
                     print(" - ", banco["name"], "Status:", status)
-                    
+
             except Exception as erro:
-                print(f"Erro: {erro}")         
+                print(f"\nErro: {erro}\n")         
 
         case "2":
             print("Você escolheu Iniciar banco")
             print()
-            escolha_banco = input("Digite qual banco quer iniciar: ")
 
-            status = iniciar_banco(escolha_banco)
-            print(status)
-    
+            try:
+                escolha_banco = input("Digite qual banco quer iniciar: ")
+
+                status = iniciar_banco(escolha_banco)
+                print(f"\n{status}")
+                
+            except Exception as erro:
+                print(f"\nErro: {erro}\n") 
 
         case "3":  
             print("Você escolheu Parar banco:")
             print()
 
-            escolha_banco = input("Digite qual banco quer parar: ")
+            try:
+                escolha_banco = input("Digite qual banco quer parar: ")
 
-            status = parar_banco(escolha_banco)
-            print(status)
+                status = parar_banco(escolha_banco)
+                print(f"\n{status}")
+            except Exception as erro:
+                print(f"\nErro: {erro}\n")  
 
         case "4":
             print("Saiu")

@@ -15,7 +15,7 @@ def verificar_status_servico(servico):
         # Quem chamou pode tratar o erro com except ou deixar a exceção continuar subindo, como verificar status banco, inicar serviço, parar serviço - nenhum faz isso e deixa com o main
 
         raise Exception(
-            f"Não foi possivel consultar o status do serviço: {servico}"
+            f"\nNão foi possivel consultar o status do serviço: {servico}\n"
             f"Falha (código {erro.returncode}): {erro.stderr}"
         )
     
@@ -80,21 +80,30 @@ def iniciar_banco(banco_st):
 
     for banco in bancos:
 
+        lista_erro = []
+
         banco_st = banco_st.upper()
         banco_dic = banco["name"].upper()
 
         if banco_dic == banco_st:
             for servico in banco["services"]:
-                    # se o iniciar servico explodir não estamos tratando
-                    status = iniciar_servico(servico)
-                    
-                    if status is False:
-                        return "Erro ao subir banco"
-                            
-            return "Banco ok"
+                    try:
+                        iniciar_servico(servico)
+                        
+                    except Exception as erro:
+                        lista_erro.append(erro)
+            if lista_erro:
+                mensagem_erro = ""
+
+                for erro in lista_erro:
+                     mensagem_erro = mensagem_erro + "\n" + str(erro)
+
+                raise Exception(mensagem_erro)
+            else:
+                return " Banco iniciado com sucesso "
         else:
-            ...
-    return 'Banco inexistente'
+            continue
+    return ' Banco inexistente '
 
 def parar_servico(servico):
 
@@ -125,10 +134,9 @@ def parar_servico(servico):
         return False
 
 def parar_banco(banco_str):
-    lista_retorno = []
+    lista_erro = []
 
     for banco in bancos:
-        algum_servico_parado = False
 
         banco_dic = banco["name"].upper()
         banco_str = banco_str.upper()
@@ -136,16 +144,23 @@ def parar_banco(banco_str):
         """print(f"{banco_dic} - {banco_str}")"""
 
         if banco_dic == banco_str:
+               
            for servicos in banco["services"]:
-                # se algum erro do parar servico fundamental nos enviar nçao estamos tratando
-                retorno = parar_servico(servicos) 
+                
+                try:
+                    parar_servico(servicos)
 
-                if retorno == False:
-                    algum_servico_parado = True
+                except Exception as erro:
+                    lista_erro.append(erro)
 
-           if algum_servico_parado:
-                return "Banco já estava parado" 
+           if lista_erro:
+                mensagem_erro = ""
+
+                for erro in lista_erro:
+                    mensagem_erro = mensagem_erro + "\n" + str(erro)
+
+                raise Exception(mensagem_erro) 
            else: 
-                return "Banco parado"
+                return "Banco parado com sucesso"
     
-    return 'Banco inexistente'
+    return f'{banco_str} - Banco inexistente'
