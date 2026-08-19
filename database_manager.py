@@ -1,6 +1,18 @@
 import subprocess
 from config import bancos
 
+def buscar_banco(nome):
+    nome_tratado = nome.upper()
+
+    for banco in bancos:
+        
+        banco_tratado = banco["name"].upper()
+          
+        if banco_tratado == nome_tratado:
+            return banco
+        
+    return False
+            
 def verificar_status_servico(servico):
     try:
         resultado = subprocess.run(
@@ -78,32 +90,30 @@ def iniciar_servico(servico):
 
 def iniciar_banco(banco_st):
 
-    for banco in bancos:
-
         lista_erro = []
 
-        banco_st = banco_st.upper()
-        banco_dic = banco["name"].upper()
+        banco_encontrado = buscar_banco(banco_st)
 
-        if banco_dic == banco_st:
-            for servico in banco["services"]:
+        if banco_encontrado:
+
+            for servico in banco_encontrado["services"]:
                     try:
                         iniciar_servico(servico)
                         
                     except Exception as erro:
                         lista_erro.append(erro)
+
             if lista_erro:
                 mensagem_erro = ""
 
                 for erro in lista_erro:
                      mensagem_erro = mensagem_erro + "\n" + str(erro)
-
                 raise Exception(mensagem_erro)
+            
             else:
                 return " Banco iniciado com sucesso "
-        else:
-            continue
-    return ' Banco inexistente '
+            
+        return ' Banco inexistente '
 
 def parar_servico(servico):
 
@@ -134,33 +144,29 @@ def parar_servico(servico):
         return False
 
 def parar_banco(banco_str):
+
     lista_erro = []
 
-    for banco in bancos:
+    banco_verificado = buscar_banco(banco_str)
 
-        banco_dic = banco["name"].upper()
-        banco_str = banco_str.upper()
+    if banco_verificado:
+            
+        for servicos in banco_verificado["services"]:
+            
+            try:
+                parar_servico(servicos)
 
-        """print(f"{banco_dic} - {banco_str}")"""
+            except Exception as erro:
+                lista_erro.append(erro)
 
-        if banco_dic == banco_str:
-               
-           for servicos in banco["services"]:
-                
-                try:
-                    parar_servico(servicos)
+        if lista_erro:
+            mensagem_erro = ""
 
-                except Exception as erro:
-                    lista_erro.append(erro)
+            for erro in lista_erro:
+                mensagem_erro = mensagem_erro + "\n" + str(erro)
 
-           if lista_erro:
-                mensagem_erro = ""
-
-                for erro in lista_erro:
-                    mensagem_erro = mensagem_erro + "\n" + str(erro)
-
-                raise Exception(mensagem_erro) 
-           else: 
-                return "Banco parado com sucesso"
-    
+            raise Exception(mensagem_erro) 
+        else: 
+            return "Banco parado com sucesso"
+         
     return f'{banco_str} - Banco inexistente'

@@ -16,7 +16,6 @@ bancos = [
         "services": [
             "OracleServiceFREE",
             "OracleOraDB23Home1TNSListener"
-            "SERVICO_QUE_NAO_EXISTE"
         ]
     }
 ]
