@@ -1,5 +1,6 @@
 import subprocess
 from config import bancos
+import time
 
 def buscar_banco(nome):
     nome_tratado = nome.upper()
@@ -12,7 +13,15 @@ def buscar_banco(nome):
             return banco
         
     return False
-            
+
+def tratando_excecoes(lista_erros):
+    mensagem_exececoes = ""
+
+    for execcoes in lista_erros:
+         mensagem_exececoes = mensagem_exececoes + "\n" + str(execcoes)
+
+    raise Exception(mensagem_exececoes)
+
 def verificar_status_servico(servico):
     try:
         resultado = subprocess.run(
@@ -77,16 +86,29 @@ def iniciar_servico(servico):
                 )
                 
     else:
-        return True # minha logica é economizar processmento, se um serviço já está ligado, não precisa rodar as camadas abaixa do if
+        return True # minha logica é economizar processmento, se um serviço já está ligado, não precisa rodar as camadas abaixa do 
     
     if "START_PENDING" in resultado.stdout:
+
+        inicio = time.time()
+        limite = 10
+        tempo = 0
+        
         status = verificar_status_servico(servico)
-        if status == "RUNNING":
-            return True
-        else:
-            return False
-    else:
+
+        while status != "RUNNING" and tempo < limite:
+
+            status = verificar_status_servico(servico)
+
+            if status == "RUNNING":
+                return True
+
+            time.sleep(1)
+            tempo = time.time() - inicio
+
         return False
+    else:
+        raise Exception("Erro interno na verificação dos status do serviço")
 
 def iniciar_banco(banco_st):
 
@@ -104,11 +126,7 @@ def iniciar_banco(banco_st):
                         lista_erro.append(erro)
 
             if lista_erro:
-                mensagem_erro = ""
-
-                for erro in lista_erro:
-                     mensagem_erro = mensagem_erro + "\n" + str(erro)
-                raise Exception(mensagem_erro)
+                raise Exception(tratando_excecoes(lista_erro))
             
             else:
                 return " Banco iniciado com sucesso "
@@ -160,12 +178,8 @@ def parar_banco(banco_str):
                 lista_erro.append(erro)
 
         if lista_erro:
-            mensagem_erro = ""
-
-            for erro in lista_erro:
-                mensagem_erro = mensagem_erro + "\n" + str(erro)
-
-            raise Exception(mensagem_erro) 
+            raise Exception(tratando_excecoes(lista_erro)) 
+        
         else: 
             return "Banco parado com sucesso"
          

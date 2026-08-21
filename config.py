@@ -15,7 +15,7 @@ bancos = [
         "name": "Oracle",
         "services": [
             "OracleServiceFREE",
-            "OracleOraDB23Home1TNSListener"
+            "OracleOraDB23Home1TNSListene"
         ]
     }
 ]
