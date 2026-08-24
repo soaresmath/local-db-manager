@@ -157,9 +157,22 @@ def parar_servico(servico):
                     f"O serviço demorou mais de 10 segundos — abortado."
                 )
 
-        return True
-    else:
+        inicio = time.time()
+        limite = 10
+        tempo = 0
+        
+        while tempo <= limite:
+            status = verificar_status_servico(servico)
+
+            if status == "STOPPED":
+                return True
+
+            time.sleep(1)
+            tempo = time.time() - inicio
+
         return False
+    else:
+        return True
 
 def parar_banco(banco_str):
 
