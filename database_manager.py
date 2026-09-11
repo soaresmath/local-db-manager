@@ -197,3 +197,87 @@ def parar_banco(banco_str):
             return "Banco parado com sucesso"
          
     return f'{banco_str} - Banco inexistente'
+
+def extrair_servicos():
+    try:
+        resultado = subprocess.run(
+            ["sc", "query" ],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=10
+        )
+
+        list_services = []
+        
+        linhas = resultado.stdout.split("\n")
+
+        for linha in linhas:
+
+            if linha.strip().startswith("NOME_DO"):
+                partes = linha.split(":", 1)
+                nome = partes[1].strip()
+
+                config_service = obter_configuracao_servico(nome)
+                displayName_service = obter_NomeDisplay_servico(nome)
+
+                list_services.append(
+                    {
+                        "name": nome,
+                        "display": displayName_service,
+                        "binary_path": config_service
+                    }
+                )
+
+        return list_services
+    except Exception as erro:
+        print(f"Erro:{erro}")
+        
+def obter_configuracao_servico(servico):
+    try:
+        resultado = subprocess.run(
+            ["sc", "qc", servico],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=10
+        )
+
+        linhas =  resultado.stdout.split("\n")
+
+        for linha in linhas:
+
+            if linha.strip().startswith("NOME_DO_CAMINHO"):
+                parte = linha.split(":", 1)
+                
+
+                caminho = parte[1].strip()
+
+                caminho_selecionado  = caminho.split('"')
+
+                return caminho_selecionado[1]
+
+    except Exception as erro:
+        raise Exception (f"Erro no obter_configuração: {erro}")
+
+def obter_NomeDisplay_servico(servico):
+    try:
+        resultado = subprocess.run(
+                    ["sc", "qc", servico ],
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                    timeout=10
+                )
+
+        linhas = resultado.stdout.split("\n")
+
+        
+        for linha in linhas:
+
+            if linha.strip().startswith("NOME_PARA"):
+                partes = linha.split(":", 1)
+
+                return partes[1].strip()
+    except Exception as erro:
+            raise Exception (f"Erro no obter_NameDisplay: {erro}")
