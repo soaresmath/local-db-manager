@@ -1,6 +1,7 @@
 import subprocess
 from config import bancos
 import time
+import json
 
 def buscar_banco(nome):
     nome_tratado = nome.upper()
@@ -17,10 +18,10 @@ def buscar_banco(nome):
 def tratando_excecoes(lista_erros):
     mensagem_exececoes = ""
 
-    for execcoes in lista_erros:
-         mensagem_exececoes = mensagem_exececoes + "\n" + str(execcoes)
+    for excecao in lista_erros:
+        mensagem_exececoes += "\n" + str(excecao)
 
-    raise Exception(mensagem_exececoes)
+    return mensagem_exececoes
 
 def verificar_status_servico(servico):
     try:
@@ -126,7 +127,7 @@ def iniciar_banco(banco_st):
                         lista_erro.append(erro)
 
             if lista_erro:
-                raise Exception(tratando_excecoes(lista_erro))
+                raise RuntimeError(tratando_excecoes(lista_erro))
             
             else:
                 return " Banco iniciado com sucesso "
@@ -191,7 +192,7 @@ def parar_banco(banco_str):
                 lista_erro.append(erro)
 
         if lista_erro:
-            raise Exception(tratando_excecoes(lista_erro)) 
+            raise RuntimeError(tratando_excecoes(lista_erro)) 
         
         else: 
             return "Banco parado com sucesso"
@@ -201,7 +202,7 @@ def parar_banco(banco_str):
 def extrair_servicos():
     try:
         resultado = subprocess.run(
-            ["sc", "query" ],
+            ["sc", "query", "state=", "all" ],
             capture_output=True,
             text=True,
             check=True,
@@ -219,19 +220,35 @@ def extrair_servicos():
                 nome = partes[1].strip()
 
                 config_service = obter_configuracao_servico(nome)
-                displayName_service = obter_NomeDisplay_servico(nome)
+                displayName_service = obter_nome_display_servico(nome)
+
+                if '"' in config_service:
+                    caminho_service = config_service.split('"')
+                    parte_caminho = caminho_service[1]
+                else:
+                    caminho_service = config_service.split()
+                    parte_caminho = caminho_service[0]
+
+                caminho_exe = parte_caminho.split('\\')
+
+                executavel = None
+
+                for pedacos in caminho_exe:
+                    if pedacos.lower().endswith(".exe"):
+                        executavel = pedacos
 
                 list_services.append(
                     {
                         "name": nome,
                         "display": displayName_service,
-                        "binary_path": config_service
+                        "binary_path": config_service,
+                        "executable": executavel
                     }
                 )
 
         return list_services
     except Exception as erro:
-        print(f"Erro:{erro}")
+        raise RuntimeError(f"Erro ao extrair serviços: {erro}") from erro
         
 def obter_configuracao_servico(servico):
     try:
@@ -243,24 +260,25 @@ def obter_configuracao_servico(servico):
             timeout=10
         )
 
-        linhas =  resultado.stdout.split("\n")
+        linhas = resultado.stdout.split("\n")
 
         for linha in linhas:
+            if "NOME_DO_CAMINHO_BIN" in linha:
+                partes = linha.split(":", 1)
+                caminho = partes[1].strip()
 
-            if linha.strip().startswith("NOME_DO_CAMINHO"):
-                parte = linha.split(":", 1)
-                
+                return caminho
 
-                caminho = parte[1].strip()
-
-                caminho_selecionado  = caminho.split('"')
-
-                return caminho_selecionado[1]
+        raise RuntimeError(
+            f"Caminho binário não encontrado para o serviço '{servico}'"
+        )
 
     except Exception as erro:
-        raise Exception (f"Erro no obter_configuração: {erro}")
+        raise RuntimeError(
+            f"Erro ao obter configuração do serviço '{servico}': {erro}"
+        ) from erro
 
-def obter_NomeDisplay_servico(servico):
+def obter_nome_display_servico(servico):
     try:
         resultado = subprocess.run(
                     ["sc", "qc", servico ],
@@ -279,5 +297,82 @@ def obter_NomeDisplay_servico(servico):
                 partes = linha.split(":", 1)
 
                 return partes[1].strip()
+        raise RuntimeError(
+            f"Nome de exibição não encontrado para o serviço '{servico}'"
+        )
+            
     except Exception as erro:
-            raise Exception (f"Erro no obter_NameDisplay: {erro}")
+        raise RuntimeError(
+            f"Erro ao obter nome de exibição do serviço '{servico}': {erro}"
+        ) from erro
+
+def extrair_processos():
+    try:
+        resultado = subprocess.run(
+            ["tasklist"],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=10
+        )
+
+        lista = []
+
+        for linha in resultado.stdout.splitlines()[3:]:
+            partes = linha.split()
+
+            for indice, parte in enumerate(partes):
+                if parte.isdigit():
+                    nome = " ".join(partes[:indice])
+                    pid = int(parte)
+
+                    lista.append({
+                        "name": nome,
+                        "pid": pid
+                    })
+
+                    break
+
+        return lista
+
+    except Exception as erro:
+        raise RuntimeError(
+            f"Erro ao extrair processos: {erro}"
+        ) from erro
+
+def filtrar_processos(nome):
+    lista_processo = extrair_processos()
+
+    lista_processos_filtrado = []
+
+    for processo in lista_processo:
+        if processo["name"] == nome:
+            lista_processos_filtrado.append(processo)
+
+    return lista_processos_filtrado
+
+def obter_detalhes_processo(pid):
+    try:
+        if not isinstance(pid, int):
+            raise ValueError("PID deve ser um número inteiro")
+
+        comando_powershell = (
+            f"Get-CimInstance Win32_Process -Filter 'ProcessId = {pid}'|Select-Object ProcessId, Name, ExecutablePath, CommandLine, ParentProcessId | ConvertTo-Json"
+        )
+
+        resultado = subprocess.run(
+            ["powershell", "-Command", comando_powershell],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=10,
+        )
+
+        dados = json.loads(resultado.stdout)
+
+        return dados
+    except Exception as erro:
+        raise RuntimeError(
+            f"Erro ao obter detalhes do processo PID {pid}: {erro}"
+        ) from erro
+
