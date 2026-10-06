@@ -1,18 +1,16 @@
 import subprocess
-from config import bancos
+from config import bancos_conhecidos
 import time
 import json
 
-def buscar_banco(nome):
+
+def buscar_banco(nome, bancos):
     nome_tratado = nome.upper()
 
     for banco in bancos:
-        
-        banco_tratado = banco["name"].upper()
-          
-        if banco_tratado == nome_tratado:
+        if banco["name"].upper() == nome_tratado:
             return banco
-        
+
     return False
 
 def tratando_excecoes(lista_erros):
@@ -26,7 +24,7 @@ def tratando_excecoes(lista_erros):
 def verificar_status_servico(servico):
     try:
         resultado = subprocess.run(
-            ["sc", "query", servico],
+            ["sc.exe", "query", servico],
             capture_output=True,
             text=True,
             check=True,
@@ -40,61 +38,60 @@ def verificar_status_servico(servico):
             f"\nNão foi possivel consultar o status do serviço: {servico}\n"
             f"Falha (código {erro.returncode}): {erro.stderr}"
         )
-    
+
     except subprocess.TimeoutExpired as erro:
         raise Exception(
             f"O serviço demorou mais de 10 segundos — abortado."
         )
-        
+
     if "STOPPED" in resultado.stdout:
         status = "STOPPED"
         return status
-                            
+
     return "RUNNING"
 
 def verificar_status_banco(banco):
-    for servico in banco["services"]:
-
+    for servico in banco["evidencias"]["servicos"]:
         # não tratamos o erro se verificar_status_servico explodir erro e enviar para nós
-        status = verificar_status_servico(servico)
-        
+        status = verificar_status_servico(servico["name"])
+
         if status == "STOPPED":
             return "STOPPED"
-    
+
     return "RUNNING"
 
 def iniciar_servico(servico):
 
-    # não tratamos o erro se por acaso o verificar status servico explodir erro se enviar para nós, mas tambem mandamos para quem nos acionar 
+    # não tratamos o erro se por acaso o verificar status servico explodir erro se enviar para nós, mas tambem mandamos para quem nos acionar
     if verificar_status_servico(servico) == "STOPPED":
         try:
             resultado = subprocess.run(
-                ["sc", "start", servico],
+                ["sc.exe", "start", servico],
                 capture_output=True,
                 text=True,
                 check=True,
                 timeout=10
             )
         except subprocess.CalledProcessError as erro:
-                raise Exception(
-                    f"Não foi possivel iniciar o serviço: {servico}"
-                    f"Falha (código {erro.returncode}): {erro.stderr}"
-                )
-            
+            raise Exception(
+                f"Não foi possivel iniciar o serviço: {servico}"
+                f"Falha (código {erro.returncode}): {erro.stderr}"
+            )
+
         except subprocess.TimeoutExpired as erro:
-                raise Exception(
-                    f"O serviço demorou mais de 10 segundos — abortado."
-                )
-                
+            raise Exception(
+                f"O serviço demorou mais de 10 segundos — abortado."
+            )
+
     else:
-        return True # minha logica é economizar processmento, se um serviço já está ligado, não precisa rodar as camadas abaixa do 
-    
+        return True  # minha logica é economizar processmento, se um serviço já está ligado, não precisa rodar as camadas abaixa do
+
     if "START_PENDING" in resultado.stdout:
 
         inicio = time.time()
         limite = 10
         tempo = 0
-        
+
         status = verificar_status_servico(servico)
 
         while status != "RUNNING" and tempo < limite:
@@ -111,28 +108,26 @@ def iniciar_servico(servico):
     else:
         raise Exception("Erro interno na verificação dos status do serviço")
 
-def iniciar_banco(banco_st):
+def iniciar_banco(banco_str, bancos):
+    lista_erro = []
 
-        lista_erro = []
+    banco_encontrado = buscar_banco(banco_str, bancos)
 
-        banco_encontrado = buscar_banco(banco_st)
+    if banco_encontrado:
+        for servico in banco_encontrado["evidencias"]["servicos"]:
+            try:
+                iniciar_servico(servico["name"])
 
-        if banco_encontrado:
+            except Exception as erro:
+                lista_erro.append(erro)
 
-            for servico in banco_encontrado["services"]:
-                    try:
-                        iniciar_servico(servico)
-                        
-                    except Exception as erro:
-                        lista_erro.append(erro)
+        if lista_erro:
+            raise RuntimeError(tratando_excecoes(lista_erro))
 
-            if lista_erro:
-                raise RuntimeError(tratando_excecoes(lista_erro))
-            
-            else:
-                return " Banco iniciado com sucesso "
-            
-        return ' Banco inexistente '
+        return "Banco iniciado com sucesso"
+
+    return "Banco inexistente"
+
 
 def parar_servico(servico):
 
@@ -140,28 +135,28 @@ def parar_servico(servico):
     if verificar_status_servico(servico) == "RUNNING":
         try:
             resultado = subprocess.run(
-                    ["sc", "stop", servico],
-                    capture_output=True,
-                    text=True,
-                    check=True,
-                    timeout=10
+                ["sc.exe", "stop", servico],
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=10
             )
 
         except subprocess.CalledProcessError as erro:
-                raise Exception(
-                    f"Não foi possivel parar o serviço: {servico}"
-                    f"Falha (código {erro.returncode}): {erro.stderr}"
-                )
-            
+            raise Exception(
+                f"Não foi possivel parar o serviço: {servico}"
+                f"Falha (código {erro.returncode}): {erro.stderr}"
+            )
+
         except subprocess.TimeoutExpired as erro:
-                raise Exception(
-                    f"O serviço demorou mais de 10 segundos — abortado."
-                )
+            raise Exception(
+                f"O serviço demorou mais de 10 segundos — abortado."
+            )
 
         inicio = time.time()
         limite = 10
         tempo = 0
-        
+
         while tempo <= limite:
             status = verificar_status_servico(servico)
 
@@ -175,34 +170,33 @@ def parar_servico(servico):
     else:
         return True
 
-def parar_banco(banco_str):
+
+def parar_banco(banco_str, bancos):
 
     lista_erro = []
 
-    banco_verificado = buscar_banco(banco_str)
+    banco_verificado = buscar_banco(banco_str, bancos)
 
     if banco_verificado:
-            
-        for servicos in banco_verificado["services"]:
-            
+        for servico in banco_verificado["evidencias"]["servicos"]:
             try:
-                parar_servico(servicos)
+                parar_servico(servico["name"])
 
             except Exception as erro:
                 lista_erro.append(erro)
 
         if lista_erro:
-            raise RuntimeError(tratando_excecoes(lista_erro)) 
-        
-        else: 
-            return "Banco parado com sucesso"
-         
-    return f'{banco_str} - Banco inexistente'
+            raise RuntimeError(tratando_excecoes(lista_erro))
+
+        return "Banco parado com sucesso"
+
+    return f"{banco_str} - Banco inexistente"
+
 
 def extrair_servicos():
     try:
         resultado = subprocess.run(
-            ["sc", "query", "state=", "all" ],
+            ["sc.exe", "query", "state=", "all"],
             capture_output=True,
             text=True,
             check=True,
@@ -210,7 +204,7 @@ def extrair_servicos():
         )
 
         list_services = []
-        
+
         linhas = resultado.stdout.split("\n")
 
         for linha in linhas:
@@ -247,13 +241,15 @@ def extrair_servicos():
                 )
 
         return list_services
+
     except Exception as erro:
         raise RuntimeError(f"Erro ao extrair serviços: {erro}") from erro
-        
+
+
 def obter_configuracao_servico(servico):
     try:
         resultado = subprocess.run(
-            ["sc", "qc", servico],
+            ["sc.exe", "qc", servico],
             capture_output=True,
             text=True,
             check=True,
@@ -278,33 +274,35 @@ def obter_configuracao_servico(servico):
             f"Erro ao obter configuração do serviço '{servico}': {erro}"
         ) from erro
 
+
 def obter_nome_display_servico(servico):
     try:
         resultado = subprocess.run(
-                    ["sc", "qc", servico ],
-                    capture_output=True,
-                    text=True,
-                    check=True,
-                    timeout=10
-                )
+            ["sc.exe", "qc", servico],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=10
+        )
 
         linhas = resultado.stdout.split("\n")
 
-        
         for linha in linhas:
 
             if linha.strip().startswith("NOME_PARA"):
                 partes = linha.split(":", 1)
 
                 return partes[1].strip()
+
         raise RuntimeError(
             f"Nome de exibição não encontrado para o serviço '{servico}'"
         )
-            
+
     except Exception as erro:
         raise RuntimeError(
             f"Erro ao obter nome de exibição do serviço '{servico}': {erro}"
         ) from erro
+
 
 def extrair_processos():
     try:
@@ -340,6 +338,7 @@ def extrair_processos():
             f"Erro ao extrair processos: {erro}"
         ) from erro
 
+
 def filtrar_processos(nome):
     lista_processo = extrair_processos()
 
@@ -351,13 +350,16 @@ def filtrar_processos(nome):
 
     return lista_processos_filtrado
 
+
 def obter_detalhes_processo(pid):
     try:
         if not isinstance(pid, int):
             raise ValueError("PID deve ser um número inteiro")
 
         comando_powershell = (
-            f"Get-CimInstance Win32_Process -Filter 'ProcessId = {pid}'|Select-Object ProcessId, Name, ExecutablePath, CommandLine, ParentProcessId | ConvertTo-Json"
+            f"Get-CimInstance Win32_Process -Filter 'ProcessId = {pid}'"
+            f"|Select-Object ProcessId, Name, ExecutablePath, CommandLine, ParentProcessId "
+            f"| ConvertTo-Json"
         )
 
         resultado = subprocess.run(
@@ -371,8 +373,81 @@ def obter_detalhes_processo(pid):
         dados = json.loads(resultado.stdout)
 
         return dados
+
     except Exception as erro:
         raise RuntimeError(
             f"Erro ao obter detalhes do processo PID {pid}: {erro}"
         ) from erro
 
+
+def descobrir_bancos():
+    try:
+        servicos = extrair_servicos()
+        processos = extrair_processos()
+
+        bancos_encontrados = []
+
+        for nome_banco, dados_banco in bancos_conhecidos.items():
+            termos_servico = [
+                termo.lower()
+                for termo in dados_banco["servico"]
+            ]
+
+            termos_processo = [
+                termo.lower()
+                for termo in dados_banco["processo"]
+            ]
+
+            evidencias_servicos = []
+            evidencias_processos = []
+
+            # Descoberta por serviços
+            for servico in servicos:
+                campos = {
+                    "name": servico["name"],
+                    "display": servico["display"],
+                    "binary_path": servico["binary_path"],
+                    "executable": servico["executable"]
+                }
+
+                encontrado = False
+
+                for campo, valor in campos.items():
+                    if valor is None:
+                        continue
+
+                    valor = valor.lower()
+
+                    if any(termo in valor for termo in termos_servico):
+                        encontrado = True
+                        break
+
+                if encontrado:
+                    evidencias_servicos.append(servico)
+
+            # Descoberta por processos
+            for processo in processos:
+                nome_processo = processo["name"].lower()
+
+                if any(
+                    termo in nome_processo
+                    for termo in termos_processo
+                ):
+                    evidencias_processos.append(processo)
+
+            # Só considera o banco encontrado se houver alguma evidência
+            if evidencias_servicos or evidencias_processos:
+                bancos_encontrados.append({
+                    "name": nome_banco,
+                    "evidencias": {
+                        "servicos": evidencias_servicos,
+                        "processos": evidencias_processos
+                    }
+                })
+
+        return bancos_encontrados
+
+    except Exception as erro:
+        raise RuntimeError(
+            f"Erro ao descobrir bancos instalados: {erro}"
+        ) from erro

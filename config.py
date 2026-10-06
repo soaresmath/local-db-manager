@@ -1,21 +1,43 @@
-bancos = [
-    {
-        "name": "MySQL",
-        "services": [
-            "MySQL80"
+bancos_conhecidos = {
+    "PostgreSQL": {
+        "servico": [
+            "postgresql",
+            "postgres"
+        ],
+        "processo": [
+            "postgres.exe",
+            "pg_ctl.exe"
         ]
     },
-    {
-        "name": "SQL Server",
-        "services": [
-            "MSSQL$SQLEXPRESS"
+
+    "MySQL": {
+        "servico": [
+            "mysql"
+        ],
+        "processo": [
+            "mysqld.exe"
         ]
     },
-    {
-        "name": "Oracle",
-        "services": [
-            "OracleServiceFREE",
-            "OracleOraDB23Home1TNSListene"
+
+    "SQL Server": {
+        "servico": [
+            "mssql",
+            "sqlagent",
+            "sqlbrowser",
+            "sqlwriter",
+            "sqltelemetry"
+        ],
+        "processo": [
+            "sqlservr.exe"
+        ]
+    },
+
+    "Oracle": {
+        "servico": [
+            "oracle"
+        ],
+        "processo": [
+            "oracle.exe"
         ]
     }
-]
+}
