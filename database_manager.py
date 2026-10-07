@@ -128,7 +128,6 @@ def iniciar_banco(banco_str, bancos):
 
     return "Banco inexistente"
 
-
 def parar_servico(servico):
 
     # não tratamos o erro se por acaso o verificar status servico explodir erro se enviar para nós, mas tambem mandamos para quem nos acionar
@@ -170,7 +169,6 @@ def parar_servico(servico):
     else:
         return True
 
-
 def parar_banco(banco_str, bancos):
 
     lista_erro = []
@@ -191,7 +189,6 @@ def parar_banco(banco_str, bancos):
         return "Banco parado com sucesso"
 
     return f"{banco_str} - Banco inexistente"
-
 
 def extrair_servicos():
     try:
@@ -245,7 +242,6 @@ def extrair_servicos():
     except Exception as erro:
         raise RuntimeError(f"Erro ao extrair serviços: {erro}") from erro
 
-
 def obter_configuracao_servico(servico):
     try:
         resultado = subprocess.run(
@@ -274,7 +270,6 @@ def obter_configuracao_servico(servico):
             f"Erro ao obter configuração do serviço '{servico}': {erro}"
         ) from erro
 
-
 def obter_nome_display_servico(servico):
     try:
         resultado = subprocess.run(
@@ -302,7 +297,6 @@ def obter_nome_display_servico(servico):
         raise RuntimeError(
             f"Erro ao obter nome de exibição do serviço '{servico}': {erro}"
         ) from erro
-
 
 def extrair_processos():
     try:
@@ -338,7 +332,6 @@ def extrair_processos():
             f"Erro ao extrair processos: {erro}"
         ) from erro
 
-
 def filtrar_processos(nome):
     lista_processo = extrair_processos()
 
@@ -349,7 +342,6 @@ def filtrar_processos(nome):
             lista_processos_filtrado.append(processo)
 
     return lista_processos_filtrado
-
 
 def obter_detalhes_processo(pid):
     try:
@@ -379,7 +371,6 @@ def obter_detalhes_processo(pid):
             f"Erro ao obter detalhes do processo PID {pid}: {erro}"
         ) from erro
 
-
 def descobrir_bancos():
     try:
         servicos = extrair_servicos()
@@ -401,7 +392,6 @@ def descobrir_bancos():
             evidencias_servicos = []
             evidencias_processos = []
 
-            # Descoberta por serviços
             for servico in servicos:
                 campos = {
                     "name": servico["name"],
@@ -425,7 +415,6 @@ def descobrir_bancos():
                 if encontrado:
                     evidencias_servicos.append(servico)
 
-            # Descoberta por processos
             for processo in processos:
                 nome_processo = processo["name"].lower()
 
@@ -435,7 +424,6 @@ def descobrir_bancos():
                 ):
                     evidencias_processos.append(processo)
 
-            # Só considera o banco encontrado se houver alguma evidência
             if evidencias_servicos or evidencias_processos:
                 bancos_encontrados.append({
                     "name": nome_banco,
