@@ -96,14 +96,14 @@ def iniciar_servico(servico):
 
         while status != "RUNNING" and tempo < limite:
 
-            status = verificar_status_servico(servico)
-
-            if status == "RUNNING":
-                return True
-
             time.sleep(1)
             tempo = time.time() - inicio
 
+            status = verificar_status_servico(servico)
+
+        if status == "RUNNING":
+            return True
+        
         return False
     else:
         raise Exception("Erro interno na verificação dos status do serviço")
