@@ -4,7 +4,7 @@ from rich.table import Table
 from rich.prompt import Prompt
 from rich.text import Text
 
-from database_manager import (
+from ldm.core.database_manager import (
     verificar_status_banco,
     iniciar_banco,
     parar_banco,

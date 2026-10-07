@@ -1,5 +1,5 @@
 import subprocess
-from config import bancos_conhecidos
+from ldm.config.databases import bancos_conhecidos
 import time
 import json
 
