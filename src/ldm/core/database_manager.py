@@ -2,6 +2,7 @@ import subprocess
 from ldm.config.databases import bancos_conhecidos
 import time
 import json
+import re
 
 
 def buscar_banco(nome, bancos):
@@ -31,24 +32,26 @@ def verificar_status_servico(servico):
             timeout=10
         )
     except subprocess.CalledProcessError as erro:
-        # o raise interrompe a execução e propaga a exceção para quem chamou.
-        # Quem chamou pode tratar o erro com except ou deixar a exceção continuar subindo, como verificar status banco, inicar serviço, parar serviço - nenhum faz isso e deixa com o main
-
         raise Exception(
-            f"\nNão foi possivel consultar o status do serviço: {servico}\n"
+            f"\nNão foi possível consultar o status do serviço: {servico}\n"
             f"Falha (código {erro.returncode}): {erro.stderr}"
         )
-
-    except subprocess.TimeoutExpired as erro:
+    except subprocess.TimeoutExpired:
         raise Exception(
-            f"O serviço demorou mais de 10 segundos — abortado."
+            "O serviço demorou mais de 10 segundos — abortado."
         )
 
-    if "STOPPED" in resultado.stdout:
-        status = "STOPPED"
-        return status
+    padrao = r"(?:STATE|ESTADO)\s*:\s*(\d+)\s+(\w+)"
 
-    return "RUNNING"
+    for linha in resultado.stdout.splitlines():
+        correspondencia = re.search(padrao, linha)
+
+        if correspondencia:
+            return correspondencia.group(2)
+
+    raise RuntimeError(
+        f"Não foi possível identificar o estado do serviço: {servico}"
+    )
 
 def verificar_status_banco(banco):
     for servico in banco["evidencias"]["servicos"]:
@@ -60,10 +63,32 @@ def verificar_status_banco(banco):
 
     return "RUNNING"
 
+def aguardar_transicao_servico(servico, estados_transitorios, limite=10):
+    inicio = time.time()
+    tempo = 0
+
+    status = verificar_status_servico(servico)
+
+    while status in estados_transitorios and tempo < limite:
+        time.sleep(1)
+        tempo = time.time() - inicio
+        status = verificar_status_servico(servico)
+
+    return status
+
 def iniciar_servico(servico):
 
-    # não tratamos o erro se por acaso o verificar status servico explodir erro se enviar para nós, mas tambem mandamos para quem nos acionar
-    if verificar_status_servico(servico) == "STOPPED":
+    status = verificar_status_servico(servico)
+
+    if status == "RUNNING":
+        return True
+
+    if status == "PAUSED":
+        raise RuntimeError(
+            f"O serviço '{servico}' está pausado e não pode ser iniciado pelo LDM."
+        )
+
+    if status == "STOPPED":
         try:
             resultado = subprocess.run(
                 ["sc.exe", "start", servico],
@@ -74,39 +99,68 @@ def iniciar_servico(servico):
             )
         except subprocess.CalledProcessError as erro:
             raise Exception(
-                f"Não foi possivel iniciar o serviço: {servico}"
+                f"Não foi possível iniciar o serviço: {servico}"
                 f"Falha (código {erro.returncode}): {erro.stderr}"
             )
-
-        except subprocess.TimeoutExpired as erro:
+        except subprocess.TimeoutExpired:
             raise Exception(
-                f"O serviço demorou mais de 10 segundos — abortado."
+                "O serviço demorou mais de 10 segundos — abortado."
             )
 
-    else:
-        return True  # minha logica é economizar processmento, se um serviço já está ligado, não precisa rodar as camadas abaixa do
+        if "START_PENDING" in resultado.stdout:
+            status = aguardar_transicao_servico(servico,{"START_PENDING"})
 
-    if "START_PENDING" in resultado.stdout:
+            if status == "RUNNING":
+                return True
 
-        inicio = time.time()
-        limite = 10
-        tempo = 0
+            if status == "PAUSED":
+                raise RuntimeError(
+                    f"O serviço '{servico}' foi pausado durante a inicialização."
+                )
 
-        status = verificar_status_servico(servico)
+            return False
 
-        while status != "RUNNING" and tempo < limite:
+        raise RuntimeError(
+            "Erro interno na verificação do status do serviço."
+        )
 
-            time.sleep(1)
-            tempo = time.time() - inicio
-
-            status = verificar_status_servico(servico)
+    if status == "START_PENDING":
+        status = aguardar_transicao_servico(servico,{"START_PENDING"})
 
         if status == "RUNNING":
             return True
-        
+
+        if status == "PAUSED":
+            raise RuntimeError(
+                f"O serviço '{servico}' está pausado e não pode ser iniciado pelo LDM."
+            )
+
         return False
-    else:
-        raise Exception("Erro interno na verificação dos status do serviço")
+
+    if status == "STOP_PENDING":
+        status = aguardar_transicao_servico(servico,{"STOP_PENDING"})
+
+        if status == "STOPPED":
+            return iniciar_servico(servico)
+
+        return False
+
+    if status in ["PAUSE_PENDING", "CONTINUE_PENDING"]:
+        status = aguardar_transicao_servico(servico,{status})
+
+        if status == "RUNNING":
+            return True
+
+        if status == "PAUSED":
+            raise RuntimeError(
+                f"O serviço '{servico}' está pausado e não pode ser iniciado pelo LDM."
+            )
+
+        return False
+
+    raise RuntimeError(
+        f"Estado do serviço não suportado pelo LDM: {status}"
+    )
 
 def iniciar_banco(banco_str, bancos):
     lista_erro = []
@@ -130,44 +184,98 @@ def iniciar_banco(banco_str, bancos):
 
 def parar_servico(servico):
 
-    # não tratamos o erro se por acaso o verificar status servico explodir erro se enviar para nós, mas tambem mandamos para quem nos acionar
-    if verificar_status_servico(servico) == "RUNNING":
+    status = verificar_status_servico(servico)
+
+    if status == "STOPPED":
+        return True
+
+    if status == "PAUSED":
+        raise RuntimeError(
+            f"O serviço '{servico}' está pausado e não pode ser parado pelo LDM."
+        )
+
+    if status == "RUNNING":
         try:
-            resultado = subprocess.run(
+            subprocess.run(
                 ["sc.exe", "stop", servico],
                 capture_output=True,
                 text=True,
                 check=True,
                 timeout=10
             )
-
         except subprocess.CalledProcessError as erro:
             raise Exception(
-                f"Não foi possivel parar o serviço: {servico}"
+                f"Não foi possível parar o serviço: {servico}"
                 f"Falha (código {erro.returncode}): {erro.stderr}"
             )
-
-        except subprocess.TimeoutExpired as erro:
+        except subprocess.TimeoutExpired:
             raise Exception(
-                f"O serviço demorou mais de 10 segundos — abortado."
+                "O serviço demorou mais de 10 segundos — abortado."
             )
 
-        inicio = time.time()
-        limite = 10
-        tempo = 0
+        status = aguardar_transicao_servico(servico,{"RUNNING", "STOP_PENDING"})
 
-        while tempo <= limite:
-            status = verificar_status_servico(servico)
+        return status == "STOPPED"
 
-            if status == "STOPPED":
-                return True
+    if status == "STOP_PENDING":
+        status = aguardar_transicao_servico(
+            servico,
+            {"STOP_PENDING"}
+        )
 
-            time.sleep(1)
-            tempo = time.time() - inicio
+        return status == "STOPPED"
+
+    if status == "START_PENDING":
+        status = aguardar_transicao_servico(servico,{"START_PENDING"})
+
+        if status == "RUNNING":
+            return parar_servico(servico)
+
+        if status == "STOPPED":
+            return True
+
+        if status == "PAUSED":
+            raise RuntimeError(
+                f"O serviço '{servico}' está pausado e não pode ser parado pelo LDM."
+            )
 
         return False
-    else:
-        return True
+
+    if status == "CONTINUE_PENDING":
+        status = aguardar_transicao_servico(servico,{"CONTINUE_PENDING"})
+
+        if status == "RUNNING":
+            return parar_servico(servico)
+
+        if status == "STOPPED":
+            return True
+
+        if status == "PAUSED":
+            raise RuntimeError(
+                f"O serviço '{servico}' está pausado e não pode ser parado pelo LDM."
+            )
+
+        return False
+
+    if status == "PAUSE_PENDING":
+        status = aguardar_transicao_servico(servico,{"PAUSE_PENDING"})
+
+        if status == "PAUSED":
+            raise RuntimeError(
+                f"O serviço '{servico}' está pausado e não pode ser parado pelo LDM."
+            )
+
+        if status == "STOPPED":
+            return True
+
+        if status == "RUNNING":
+            return parar_servico(servico)
+
+        return False
+
+    raise RuntimeError(
+        f"Estado do serviço não suportado pelo LDM: {status}"
+    )
 
 def parar_banco(banco_str, bancos):
 
@@ -424,7 +532,7 @@ def descobrir_bancos():
                 ):
                     evidencias_processos.append(processo)
 
-            if evidencias_servicos or evidencias_processos:
+            if evidencias_servicos:
                 bancos_encontrados.append({
                     "name": nome_banco,
                     "evidencias": {
