@@ -9,7 +9,9 @@ from ldm.core.database_manager import (
     iniciar_servico,
     parar_servico,
     iniciar_banco,
-    parar_banco
+    parar_banco,
+    obter_configuracao_servico,
+    descobrir_bancos
 )
 
 
