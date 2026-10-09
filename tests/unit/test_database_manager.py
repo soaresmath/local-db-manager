@@ -3,9 +3,12 @@ import subprocess
 from unittest.mock import patch, Mock
 
 from ldm.core.database_manager import (
+    ResultadoOperacao,
     buscar_banco,
     tratando_excecoes,
     verificar_status_servico,
+    verificar_status_banco,
+    aguardar_transicao_servico,
     iniciar_servico,
     parar_servico,
     iniciar_banco,
@@ -139,6 +142,64 @@ def test_verificar_status_servico_estado_nao_identificado(mock_run):
     with pytest.raises(RuntimeError):
         verificar_status_servico("MySQL80")
 
+
+@patch("ldm.core.database_manager.time.sleep")
+@patch("ldm.core.database_manager.verificar_status_servico")
+def test_aguardar_transicao_ignora_estado_intermediario_inesperado(
+    mock_status,
+    mock_sleep
+):
+    # verifica se a espera continua até alcançar o estado final esperado
+    mock_status.side_effect = ["PAUSED", "RUNNING"]
+
+    resultado = aguardar_transicao_servico("MySQL80", {"RUNNING"})
+
+    assert resultado == "RUNNING"
+    assert mock_status.call_count == 2
+    mock_sleep.assert_called_once()
+
+
+@patch("ldm.core.database_manager.verificar_status_servico")
+def test_verificar_status_banco_retorna_mixed_para_servicos_em_estados_diferentes(
+    mock_status
+):
+    # verifica se serviços em estados diferentes não são classificados como RUNNING
+    mock_status.side_effect = ["RUNNING", "STOPPED"]
+    banco = {
+        "evidencias": {
+            "servicos": [{"name": "db-instance"}, {"name": "db-listener"}]
+        }
+    }
+
+    assert verificar_status_banco(banco) == "MIXED"
+
+
+@patch("ldm.core.database_manager.extrair_processos", return_value=[])
+@patch("ldm.core.database_manager.extrair_servicos")
+def test_descobrir_oracle_nao_agrupa_listener_com_instancia(
+    mock_servicos,
+    mock_processos
+):
+    # verifica se a instância e o listener Oracle são descobertos separadamente
+    mock_servicos.return_value = [
+        {"name": "OracleServiceFREE"},
+        {"name": "OracleOraDB23Home1TNSListener"}
+    ]
+
+    bancos = descobrir_bancos()
+
+    oracle = next(banco for banco in bancos if banco["name"] == "Oracle")
+    assert [servico["name"] for servico in oracle["evidencias"]["servicos"]] == [
+        "OracleServiceFREE"
+    ]
+
+    listener = next(
+        banco for banco in bancos if banco["name"] == "Oracle Listener"
+    )
+    assert [servico["name"] for servico in listener["evidencias"]["servicos"]] == [
+        "OracleOraDB23Home1TNSListener"
+    ]
+
 @patch("ldm.core.database_manager.subprocess.run")
 def test_verificar_status_servico_erro(mock_run):
     # simulamos um erro do Windows
@@ -161,7 +222,7 @@ def test_iniciar_servico(mock_status, mock_run):
 
     resultado = iniciar_servico("MySQL80")
 
-    assert resultado is True
+    assert resultado is ResultadoOperacao.CHANGED
 
     mock_run.assert_called_once_with(
         ["sc.exe", "start", "MySQL80"],
@@ -178,7 +239,7 @@ def test_iniciar_servico_quando_esta_rodando(mock_status):
 
     resultado = iniciar_servico("MySQL80")
 
-    assert resultado is True
+    assert resultado is ResultadoOperacao.ALREADY_IN_STATE
     mock_status.assert_called_once_with("MySQL80")
 
 @patch("ldm.core.database_manager.verificar_status_servico")
@@ -200,7 +261,7 @@ def test_iniciar_servico_start_pending(mock_status):
 
     resultado = iniciar_servico("MySQL80")
 
-    assert resultado is True
+    assert resultado is ResultadoOperacao.CHANGED
 
 @patch("ldm.core.database_manager.verificar_status_servico")
 @patch("ldm.core.database_manager.subprocess.run")
@@ -220,7 +281,7 @@ def test_iniciar_servico_stop_pending(mock_run, mock_status):
 
     resultado = iniciar_servico("MySQL80")
 
-    assert resultado is True
+    assert resultado is ResultadoOperacao.CHANGED
 
 @patch("ldm.core.database_manager.verificar_status_servico")
 def test_iniciar_servico_pause_pending(mock_status):
@@ -244,20 +305,27 @@ def test_iniciar_servico_continue_pending(mock_status):
 
     resultado = iniciar_servico("MySQL80")
 
-    assert resultado is True
+    assert resultado is ResultadoOperacao.CHANGED
 
 @patch("ldm.core.database_manager.subprocess.run")
+@patch("ldm.core.database_manager.aguardar_transicao_servico")
 @patch("ldm.core.database_manager.verificar_status_servico")
-def test_parar_servico(mock_status, mock_run):
+def test_parar_servico(mock_status, mock_aguardar, mock_run):
     # simulamos que o serviço está rodando e depois para
-    mock_status.side_effect = ["RUNNING", "STOPPED"]
+    mock_status.return_value = "RUNNING"
+    mock_aguardar.return_value = "STOPPED"
 
     mock_resultado = Mock()
     mock_run.return_value = mock_resultado
 
     resultado = parar_servico("MySQL80")
 
-    assert resultado is True
+    assert resultado is ResultadoOperacao.CHANGED
+    mock_aguardar.assert_called_once_with(
+        "MySQL80",
+        {"STOPPED"},
+        limite=60
+    )
 
     mock_run.assert_called_with(
         ["sc.exe", "stop", "MySQL80"],
@@ -274,7 +342,7 @@ def test_parar_servico_quando_esta_parado(mock_status):
 
     resultado = parar_servico("MySQL80")
 
-    assert resultado is True
+    assert resultado is ResultadoOperacao.ALREADY_IN_STATE
     mock_status.assert_called_once_with("MySQL80")
 
 @patch("ldm.core.database_manager.verificar_status_servico")
@@ -292,7 +360,7 @@ def test_parar_servico_quando_esta_rodando(mock_run, mock_status):
 
     resultado = parar_servico("MySQL80")
 
-    assert resultado is True
+    assert resultado is ResultadoOperacao.CHANGED
     mock_run.assert_called_once()
 
 @patch("ldm.core.database_manager.verificar_status_servico")
@@ -306,7 +374,7 @@ def test_parar_servico_stop_pending(mock_status):
 
     resultado = parar_servico("MySQL80")
 
-    assert resultado is True
+    assert resultado is ResultadoOperacao.CHANGED
 
 @patch("ldm.core.database_manager.verificar_status_servico")
 @patch("ldm.core.database_manager.subprocess.run")
@@ -324,7 +392,7 @@ def test_parar_servico_start_pending(mock_run, mock_status):
 
     resultado = parar_servico("MySQL80")
 
-    assert resultado is True
+    assert resultado is ResultadoOperacao.CHANGED
     mock_run.assert_called_once()
 
 @patch("ldm.core.database_manager.verificar_status_servico")
@@ -362,7 +430,7 @@ def test_parar_servico_continue_pending(mock_run, mock_status):
 
     resultado = parar_servico("MySQL80")
 
-    assert resultado is True
+    assert resultado is ResultadoOperacao.CHANGED
     mock_run.assert_called_once()
 
 @patch("ldm.core.database_manager.verificar_status_servico")
@@ -381,7 +449,7 @@ def test_parar_servico_quando_ja_esta_parado(mock_status, mock_run):
 
     resultado = parar_servico("MySQL80")
 
-    assert resultado is True
+    assert resultado is ResultadoOperacao.ALREADY_IN_STATE
 
     mock_run.assert_not_called()
 
@@ -393,7 +461,7 @@ def test_iniciar_servico_quando_ja_esta_rodando(mock_status, mock_run):
 
     resultado = iniciar_servico("MySQL80")
 
-    assert resultado is True
+    assert resultado is ResultadoOperacao.ALREADY_IN_STATE
 
     mock_run.assert_not_called()
 
@@ -503,4 +571,77 @@ def test_parar_banco_inexistente():
 
     resultado = parar_banco("PostgreSQL", bancos)
 
-    assert resultado == "PostgreSQL - Banco inexistente"
+    assert resultado == "Banco inexistente"
+
+
+@patch("ldm.core.database_manager.iniciar_servico")
+def test_iniciar_banco_quando_todos_ja_estao_rodando(mock_iniciar):
+    bancos = [{
+        "name": "MySQL",
+        "evidencias": {"servicos": [{"name": "MySQL80"}, {"name": "MySQLBackup"}]}
+    }]
+    mock_iniciar.return_value = ResultadoOperacao.ALREADY_IN_STATE
+
+    resultado = iniciar_banco("MySQL", bancos)
+
+    assert resultado == "O banco já estava em execução"
+    assert mock_iniciar.call_count == 2
+
+
+@patch("ldm.core.database_manager.iniciar_servico")
+def test_iniciar_banco_quando_parte_dos_servicos_muda(mock_iniciar):
+    bancos = [{
+        "name": "Oracle",
+        "evidencias": {"servicos": [{"name": "OracleServiceFREE"}, {"name": "OracleListener"}]}
+    }]
+    mock_iniciar.side_effect = [
+        ResultadoOperacao.CHANGED,
+        ResultadoOperacao.ALREADY_IN_STATE,
+    ]
+
+    resultado = iniciar_banco("Oracle", bancos)
+
+    assert resultado == "Banco iniciado com sucesso"
+
+
+@patch("ldm.core.database_manager.parar_servico")
+def test_parar_banco_quando_todos_ja_estao_parados(mock_parar):
+    bancos = [{
+        "name": "PostgreSQL",
+        "evidencias": {"servicos": [{"name": "postgresql-x64-18"}]}
+    }]
+    mock_parar.return_value = ResultadoOperacao.ALREADY_IN_STATE
+
+    resultado = parar_banco("PostgreSQL", bancos)
+
+    assert resultado == "O banco já estava parado"
+
+
+@patch("ldm.core.database_manager.parar_servico")
+def test_parar_banco_quando_parte_dos_servicos_muda(mock_parar):
+    bancos = [{
+        "name": "Oracle",
+        "evidencias": {"servicos": [{"name": "OracleServiceFREE"}, {"name": "OracleListener"}]}
+    }]
+    mock_parar.side_effect = [
+        ResultadoOperacao.CHANGED,
+        ResultadoOperacao.ALREADY_IN_STATE,
+    ]
+
+    resultado = parar_banco("Oracle", bancos)
+
+    assert resultado == "Banco parado com sucesso"
+
+
+def test_iniciar_banco_sem_servicos():
+    bancos = [{"name": "MySQL", "evidencias": {"servicos": []}}]
+
+    with pytest.raises(RuntimeError, match="Nenhum serviço"):
+        iniciar_banco("MySQL", bancos)
+
+
+def test_parar_banco_sem_servicos():
+    bancos = [{"name": "MySQL", "evidencias": {"servicos": []}}]
+
+    with pytest.raises(RuntimeError, match="Nenhum serviço"):
+        parar_banco("MySQL", bancos)

@@ -21,11 +21,7 @@ bancos_conhecidos = {
 
     "SQL Server": {
         "servico": [
-            "mssql",
-            "sqlagent",
-            "sqlbrowser",
-            "sqlwriter",
-            "sqltelemetry"
+            "mssql$"
         ],
         "processo": [
             "sqlservr.exe"
@@ -34,10 +30,17 @@ bancos_conhecidos = {
 
     "Oracle": {
         "servico": [
-            "oracle"
+            "OracleService"
         ],
         "processo": [
             "oracle.exe"
         ]
+    },
+
+    "Oracle Listener": {
+        "servico": [
+            "OracleOraDB"
+        ],
+        "processo": []
     }
 }
