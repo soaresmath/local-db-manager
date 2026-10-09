@@ -1,491 +1,293 @@
-# Local Database Manager
+# Local Database Manager (LDM)
 
-Uma ferramenta em Python para gerenciamento de ambientes de bancos de dados locais no Windows.
+Uma ferramenta em Python para gerenciar serviços de bancos de dados
+instalados localmente no Windows, com foco em controle, diagnóstico e
+aprendizado prático de administração de bancos de dados, automação etc
 
-O LDM (Local Database Manager) foi criado para facilitar o controle de bancos de dados instalados localmente, permitindo identificar seus serviços, consultar seus estados e iniciar ou parar seus ambientes conforme a necessidade.
+O LDM nasceu de uma situação comum durante os estudos: instalar
+diferentes SGBDs para praticar e perceber que vários serviços podem
+permanecer ativos mesmo quando não estão sendo utilizados, consumindo
+memória e processamento.
 
----
+> "Se eu não estou utilizando um banco de dados, por que ele precisa
+> permanecer executando?"
 
-## Sobre o projeto
+A ideia é oferecer uma forma simples de identificar esses serviços,
+consultar seu estado e iniciar ou parar os que forem necessários,
+mantendo o controle sobre o ambiente local.
 
-O Local Database Manager nasceu de uma necessidade prática durante o desenvolvimento e estudo de bancos de dados.
-
-Ao trabalhar com diferentes SGBDs instalados na mesma máquina, como MySQL, SQL Server, Oracle e PostgreSQL, é comum que alguns de seus serviços sejam iniciados automaticamente junto com o Windows.
-
-Mesmo quando não estão sendo utilizados, esses serviços podem permanecer ativos e consumir recursos da máquina, principalmente memória e processamento.
-
-A ideia do LDM surgiu para transformar esse problema em uma ferramenta simples:
-
-> **Se eu não estou utilizando um banco de dados, por que ele precisa permanecer executando?**
-
-A partir disso, o projeto começou como uma pequena ferramenta para iniciar e parar serviços de bancos de dados e evoluiu para um estudo mais amplo sobre:
-
-- desenvolvimento de aplicações Python;
-- automação no Windows;
-- gerenciamento de serviços;
-- descoberta de softwares instalados;
-- arquitetura e organização de projetos;
-- tratamento de erros;
-- testes automatizados;
-- empacotamento de aplicações Python;
-- construção de ferramentas de linha de comando.
-
-O projeto também serve como um laboratório para transformar conhecimentos de Python e administração de bancos de dados em uma aplicação prática.
-
----
-
-## Motivação
-
-O projeto possui duas motivações principais.
-
-### Problema prático
-
-Manter diversos bancos de dados instalados para estudos e projetos pode deixar a máquina com vários serviços executando simultaneamente.
-
-O LDM busca tornar esse gerenciamento mais simples, permitindo que o usuário mantenha seus ambientes disponíveis sem precisar abrir manualmente ferramentas administrativas do Windows ou memorizar os nomes dos serviços de cada SGBD.
-
-### Aprendizado
-
-O LDM também foi criado como um projeto de aprendizado.
-
-Em vez de estudar Python, Git, testes, arquitetura e automação de forma isolada, a proposta é aprender esses conceitos enquanto uma ferramenta real é construída.
-
-Por isso, algumas decisões do projeto são deliberadamente incrementais. A aplicação começou simples e está sendo evoluída conforme novos problemas aparecem.
-
----
+**Status:** MVP funcional em evolução.
 
 ## Objetivos
 
-Os principais objetivos do projeto são:
+-   Identificar serviços de bancos de dados conhecidos no Windows.
+-   Consultar o estado dos serviços e processos associados.
+-   Iniciar e parar serviços quando necessário.
+-   Tratar estados intermediários, falhas e tempos limite.
+-   Oferecer uma interface de terminal simples e legível.
+-   Construir uma base para futuras funcionalidades de diagnóstico e
+    gerenciamento de ambientes.
 
-- facilitar o gerenciamento de bancos de dados locais;
-- reduzir a necessidade de manter serviços desnecessários em execução;
-- automatizar operações comuns sobre serviços de banco de dados;
-- estudar integração entre Python e o sistema operacional;
-- praticar organização e arquitetura de projetos Python;
-- aplicar testes automatizados;
-- aprender a estruturar e distribuir uma aplicação Python.
+## Funcionalidades implementadas
 
----
+-   Descoberta de serviços conhecidos a partir de um catálogo de
+    configurações.
+-   Consulta do estado de serviços e verificação de processos
+    associados.
+-   Listagem dos bancos identificados e de seus estados.
+-   Inicialização e parada de serviços.
+-   Tratamento de bancos associados a mais de um serviço.
+-   Reconhecimento de estados mistos ou intermediários durante
+    transições.
+-   Mensagens para situações como serviço não encontrado, serviço já no
+    estado solicitado, falha e timeout.
+-   Elevação administrativa quando uma operação exige privilégios
+    elevados.
+-   Interface de terminal com tabelas e mensagens formatadas usando
+    Rich.
 
-## Funcionalidades atuais
+### Bancos e serviços contemplados
 
-Atualmente, o LDM é capaz de:
+O catálogo atual contém padrões para:
 
-- detectar bancos de dados instalados na máquina;
-- identificar serviços associados aos bancos;
-- identificar processos relacionados aos bancos;
-- consultar o estado dos serviços;
-- listar os bancos encontrados e seus respectivos status;
-- iniciar bancos que estejam parados;
-- parar bancos que estejam em execução;
-- gerenciar bancos compostos por múltiplos serviços;
-- detectar falhas durante operações sobre os serviços;
-- controlar operações com limite de tempo;
-- apresentar as informações através de uma CLI utilizando Rich.
+-   PostgreSQL
+-   MySQL
+-   Microsoft SQL Server
+-   Oracle Database
+-   Oracle Listener
 
-### Bancos atualmente reconhecidos
-
-O catálogo atual possui suporte para:
-
-- MySQL
-- SQL Server
-- Oracle
-- PostgreSQL
-
-O sistema foi projetado para que novos bancos possam ser adicionados ao catálogo sem precisar alterar toda a lógica de gerenciamento.
-
----
+A descoberta depende dos nomes de serviços e processos configurados no
+catálogo. Portanto, instalações com nomes personalizados podem não ser
+reconhecidas automaticamente.
 
 ## Demonstração
 
-Ao executar o comando:
+A interface atual é interativa: ao executar `ldm`, o usuário acessa um
+menu para listar os bancos, iniciar um serviço, parar um serviço ou
+sair.
 
-```bash
-ldm
+O exemplo abaixo ilustra o tipo de informação apresentado; os nomes e
+estados podem variar conforme os serviços instalados na máquina.
+
+``` text
+LOCAL DATABASE MANAGER
+1. Listar bancos de dados
+2. Iniciar banco de dados
+3. Parar banco de dados
+4. Sair
+
+Status possíveis: RUNNING, STOPPED e estados intermediários
 ```
 
-o LDM analisa os serviços e processos disponíveis na máquina e apresenta a interface de gerenciamento.
-
-Exemplo:
-
-```text
-╭─ LOCAL DATABASE MANAGER ─╮
-│ Database Service Manager │
-╰──────────────────────────╯
-
-✓ Análise da máquina concluída.
-
-Menu principal
-
- 1  Listar bancos
- 2  Iniciar banco
- 3  Parar banco
- 4  Sair
-```
-
-A listagem apresenta o estado atual dos bancos encontrados:
-
-```text
-    Bancos detectados
-
-┏━━━━━━━━━━━━┳━━━━━━━━━━━┓
-┃ Banco      ┃  Status   ┃
-┡━━━━━━━━━━━━╇━━━━━━━━━━━┩
-│ PostgreSQL │ ● RUNNING │
-│ MySQL      │ ● RUNNING │
-│ SQL Server │ ● STOPPED │
-│ Oracle     │ ● STOPPED │
-└────────────┴───────────┘
-```
-
----
+A interface utiliza tabelas e mensagens do Rich para tornar os
+resultados mais legíveis. Durante uma transição, o LDM pode informar que
+o serviço está em andamento, em vez de tratar imediatamente o estado
+como concluído.
 
 ## Tecnologias
 
-O projeto utiliza principalmente:
-
-- **Python**
-- **subprocess** — comunicação com comandos e serviços do Windows
-- **Rich** — interface de terminal
-- **pytest** — testes automatizados
-- **Git** — controle de versão
-- **setuptools** — empacotamento e instalação do projeto
-
----
+-   **Python** --- lógica da aplicação e organização dos módulos.
+-   **subprocess** --- interação com utilitários e comandos do Windows.
+-   **Rich** --- apresentação da interface no terminal.
+-   **pytest** --- testes automatizados.
+-   **Git e GitHub** --- versionamento e histórico de desenvolvimento.
+-   **setuptools** --- configuração e instalação do pacote Python.
 
 ## Arquitetura
 
-O projeto utiliza uma estrutura baseada em separação de responsabilidades:
-
-```text
+``` text
 local-db-manager/
-│
 ├── src/
 │   └── ldm/
 │       ├── cli/
 │       │   └── main.py
-│       │
 │       ├── config/
 │       │   └── databases.py
-│       │
 │       └── core/
-│           └── database_manager.py
-│
+│           ├── database_manager.py
+│           └── windows.py
 ├── tests/
 │   ├── unit/
-│   │   └── test_database_manager.py
-│   │
+│   │   ├── test_cli.py
+│   │   ├── test_database_manager.py
+│   │   └── test_windows.py
 │   └── integration/
 │       └── test_integration_database_manager.py
-│
 ├── pyproject.toml
-├── README.md
-└── .gitignore
+└── README.md
 ```
 
-### CLI
+### Responsabilidade dos módulos
 
-`cli/main.py`
-
-Responsável pela interface de linha de comando, interação com o usuário e apresentação das informações.
-
-### Core
-
-`core/database_manager.py`
-
-Contém a lógica responsável por comunicação com o Windows, descoberta de serviços e processos e gerenciamento dos bancos.
-
-### Configuração
-
-`config/databases.py`
-
-Mantém o catálogo de bancos conhecidos e os termos utilizados para identificar seus serviços e processos.
-
-Essa separação permite que a interface, as regras de gerenciamento e o conhecimento sobre os bancos evoluam de forma independente.
-
----
+-   **`config/databases.py`** --- mantém o catálogo de padrões de nomes
+    de serviços e processos reconhecidos.
+-   **`core/database_manager.py`** --- concentra a descoberta, a
+    consulta de estados e as operações de gerenciamento dos serviços.
+-   **`core/windows.py`** --- trata o fluxo de elevação administrativa
+    no Windows.
+-   **`cli/main.py`** --- apresenta o menu, recebe escolhas e exibe
+    resultados.
+-   **`tests/`** --- contém testes unitários e de integração para os
+    componentes do projeto.
 
 ## Como funciona
 
-O LDM realiza inicialmente uma análise do ambiente local.
+O fluxo geral pode ser resumido assim:
 
-De forma simplificada:
-
-```text
-                 Windows
-                    │
-          ┌─────────┴─────────┐
-          │                   │
-      Serviços            Processos
-          │                   │
-          └─────────┬─────────┘
-                    │
-             descobrir_bancos()
-                    │
-                    ▼
-             Bancos encontrados
-                    │
-                    ▼
-              Interface CLI
-                    │
-          ┌─────────┴─────────┐
-          │                   │
-       Iniciar              Parar
-          │                   │
-          └─────────┬─────────┘
-                    ▼
-             Serviços Windows
+``` text
+┌─────────────────────────────┐
+│       Interface CLI         │
+└──────────────┬──────────────┘
+               │ solicita operação
+               ▼
+┌─────────────────────────────┐
+│     Database Manager        │
+│ descoberta e gerenciamento │
+└──────────────┬──────────────┘
+               │ consulta / inicia / para
+               ▼
+┌─────────────────────────────┐
+│   Serviços e processos      │
+│       do Windows            │
+└─────────────────────────────┘
 ```
 
-A descoberta utiliza informações dos serviços e processos disponíveis na máquina para identificar quais bancos conhecidos estão presentes.
-
-Depois da descoberta, as operações de gerenciamento utilizam os serviços encontrados para consultar, iniciar ou parar os bancos.
-
----
+O catálogo de configurações orienta quais nomes de serviços e processos
+devem ser reconhecidos. A camada de gerenciamento consulta o Windows e
+executa as operações solicitadas; a CLI apresenta os resultados ao
+usuário.
 
 ## Tratamento de erros
 
-O LDM utiliza `subprocess` para executar comandos do sistema operacional, como consultas e operações sobre serviços do Windows.
+O projeto considera situações como:
 
-Essas operações podem falhar por diferentes motivos, como:
+-   Banco ou serviço não encontrado.
+-   Serviço já iniciado ou já parado.
+-   Falha ao iniciar ou parar.
+-   Tempo limite durante uma operação.
+-   Necessidade de privilégios administrativos.
+-   Serviços associados a um mesmo banco apresentando estados
+    diferentes.
 
-- serviço inexistente;
-- falta de permissões;
-- falha durante a execução do comando;
-- serviço que não responde dentro do tempo esperado;
-- erro na comunicação com o sistema operacional.
-
-Os erros são tratados nas camadas responsáveis pelas operações e propagados quando necessário para que possam ser apresentados pela interface.
-
-O fluxo geral é:
-
-```text
-Windows / subprocess
-        ↓
-função de serviço
-        ↓
-gerenciamento do banco
-        ↓
-CLI
-        ↓
-usuário
-```
-
-O projeto utiliza `try`, `except`, `raise` e limites de tempo para evitar que uma operação fique aguardando indefinidamente.
-
----
-
-## Testes
-
-O projeto possui testes unitários e testes de integração.
-
-### Testes unitários
-
-Os testes unitários verificam a lógica do sistema de forma isolada, utilizando mocks para simular chamadas ao sistema operacional.
-
-Entre os comportamentos testados estão:
-
-- busca de bancos;
-- tratamento de exceções;
-- consulta de status;
-- inicialização de serviços;
-- parada de serviços;
-- inicialização de bancos;
-- parada de bancos;
-- tratamento de bancos inexistentes;
-- tratamento de falhas durante operações.
-
-### Testes de integração
-
-Os testes de integração executam operações reais no ambiente Windows para verificar a comunicação com os serviços do sistema.
-
-São testados, por exemplo:
-
-- consulta de um serviço real;
-- obtenção da configuração de um serviço;
-- descoberta de bancos presentes na máquina.
-
-Atualmente:
-
-```text
-19 testes
-19 passando
-```
-
-Os testes de integração dependem de um ambiente Windows com os serviços necessários disponíveis.
-
----
-
-## Requisitos
-
-Atualmente o LDM é direcionado para **Windows**, pois utiliza recursos específicos do sistema operacional, como:
-
-- `sc.exe`
-- `tasklist`
-- PowerShell / CIM
-
-Também é necessário:
-
-- Python 3.10 ou superior;
-- permissões adequadas para iniciar e parar serviços;
-- pelo menos um banco de dados reconhecido pelo catálogo para utilizar a descoberta.
-
----
+As mensagens e os códigos de saída ajudam a diferenciar sucesso, erro,
+banco não encontrado e operação que não precisava ser executada. O
+comportamento exato depende da operação e do estado encontrado.
 
 ## Instalação
 
-Clone o repositório:
+### Requisitos
 
-```bash
+-   Windows.
+-   Python 3.10 ou superior.
+-   Utilitários do Windows necessários à consulta e ao controle de
+    serviços, como `sc.exe` e `tasklist`.
+-   Permissões administrativas para operações que exigem elevação.
+-   Pelo menos um serviço de banco de dados compatível com os padrões do
+    catálogo para observar resultados de descoberta.
+
+### Instalar a partir do repositório
+
+Clone o repositório e entre na pasta do projeto:
+
+``` bash
 git clone <URL_DO_REPOSITORIO>
 cd local-db-manager
 ```
 
+> Substitua `<URL_DO_REPOSITORIO>` pela URL real do repositório.
+
+Crie e ative um ambiente virtual:
+
+``` bash
+python -m venv .venv
+.venv\Scripts\activate
+```
+
 Instale o projeto em modo editável:
 
-```bash
+``` bash
 python -m pip install -e .
 ```
 
-Após a instalação, o comando `ldm` ficará disponível no terminal.
+## Como usar
 
-Execute:
+Após a instalação, execute:
 
-```bash
+``` bash
 ldm
 ```
 
----
+Use o menu interativo para listar os bancos identificados, iniciar um
+serviço, parar um serviço ou sair. Algumas operações podem solicitar
+confirmação de elevação administrativa do Windows.
 
-## Uso
+> **Importante:** comandos diretos como `ldm status`, `ldm start mysql`
+> e `ldm stop mysql` são ideias para uma versão futura; não fazem parte
+> da interface atual descrita neste README.
 
-Ao iniciar o LDM, a aplicação realiza a análise inicial do ambiente e apresenta o menu principal.
+## Testes
 
-As opções disponíveis atualmente são:
+O projeto possui testes unitários e de integração. Na última execução
+compartilhada durante o desenvolvimento, o resultado foi:
 
-```text
-1 - Listar bancos
-2 - Iniciar banco
-3 - Parar banco
-4 - Sair
+``` text
+59 passed in 20.30s
 ```
 
-O usuário pode consultar os bancos encontrados e executar operações de inicialização ou parada conforme a necessidade.
-
----
-
-## Aprendizados
-
-O LDM está sendo utilizado como um projeto prático para consolidar conhecimentos de desenvolvimento de software.
-
-Durante sua construção estão sendo praticados:
-
-### Python
-
-- organização de módulos;
-- funções;
-- listas e dicionários;
-- tratamento de exceções;
-- `subprocess`;
-- manipulação de dados;
-- interação com o sistema operacional.
-
-### Engenharia de software
-
-- separação de responsabilidades;
-- organização de projetos;
-- arquitetura em camadas;
-- tratamento de erros;
-- testes unitários;
-- testes de integração;
-- manutenção de código.
-
-### Ferramentas
-
-- Git e GitHub;
-- pytest;
-- Rich;
-- `pyproject.toml`;
-- empacotamento e instalação de aplicações Python.
-
-Mais importante do que apenas aprender a sintaxe dessas ferramentas é entender **quando utilizá-las e qual problema elas resolvem**.
-
----
-
-## O que este projeto representa
-
-O LDM não foi criado apenas como um exercício de Python.
-
-A proposta é construir uma ferramenta útil enquanto os conceitos necessários para desenvolver software de forma mais estruturada são aprendidos.
-
-O projeto começou com uma necessidade simples — controlar bancos de dados locais — e foi evoluindo para envolver:
-
-```text
-Python
-   ↓
-Automação
-   ↓
-Sistema operacional
-   ↓
-Arquitetura
-   ↓
-Testes
-   ↓
-Empacotamento
-   ↓
-Ferramenta de linha de comando
-```
-
-Esse processo faz parte do objetivo principal do projeto: transformar conhecimento teórico em uma aplicação que possa ser utilizada, testada e evoluída.
-
----
-
-## Roadmap
-
-Algumas ideias estão planejadas para versões futuras, mas não fazem parte do MVP atual.
-
-### Próximas possibilidades
-
-- atualização da descoberta sem reiniciar a aplicação;
-- visualização das evidências encontradas para cada banco;
-- diagnóstico do ambiente;
-- informações de CPU e memória;
-- histórico e logs das operações;
-- comandos específicos pela CLI, como:
-
-```bash
-ldm status
-ldm start mysql
-ldm stop mysql
-```
-
-- suporte a ambientes de banco executando através do Docker;
-- configuração personalizada de ambientes;
-- testes mais abrangentes.
-
-A prioridade é manter o núcleo simples e confiável antes de adicionar novas funcionalidades.
-
----
+Esse número representa a execução registrada naquele momento; os
+resultados podem mudar conforme alterações no código e no ambiente.
 
 ## Limitações atuais
 
-O LDM atualmente:
+-   Compatível com Windows.
+-   A descoberta depende de padrões de nomes definidos no catálogo.
+-   Não oferece gerenciamento de ambientes Docker nesta versão.
+-   Ainda não apresenta métricas de consumo de CPU e memória dos bancos.
+-   A interface atual é um menu interativo; comandos diretos por
+    subcomando estão planejados, não implementados.
 
-- é direcionado ao Windows;
-- depende dos serviços do sistema operacional;
-- possui um catálogo definido de bancos reconhecidos;
-- ainda não gerencia bancos executados através do Docker;
-- não monitora continuamente consumo de CPU ou memória.
+## Próximas etapas
 
-Essas limitações são intencionais neste momento, pois o objetivo atual é consolidar o núcleo da ferramenta.
+As ideias para evolução incluem:
 
----
+-   Atualizar a descoberta de serviços durante a execução.
+-   Melhorar diagnósticos do ambiente e apresentar evidências úteis em
+    caso de falha.
+-   Registrar operações e erros em logs.
+-   Adicionar métricas de CPU e memória.
+-   Criar suporte a ambientes de banco de dados via Docker.
+-   Permitir ambientes configuráveis.
+-   Expandir os testes e a cobertura de cenários de falha.
+-   Adicionar comandos diretos à CLI, como `status`, `start` e `stop`.
 
-## Status do projeto
+Esses itens são objetivos futuros, não funcionalidades garantidas na
+versão atual.
 
-**MVP em fase final de desenvolvimento.**
+## O que estou aprendendo com o projeto
 
-O núcleo de descoberta e gerenciamento já está funcionando em um ambiente Windows real, com testes unitários e de integração automatizados.
+O LDM é também um exercício de engenharia de software aplicada. Durante
+seu desenvolvimento, pratico:
 
-O próximo objetivo é finalizar a documentação, revisar o MVP e avaliar quais funcionalidades realmente fazem sentido para uma futura versão 2.
+-   Separação de responsabilidades entre CLI, configuração e lógica de
+    gerenciamento.
+-   Uso do `subprocess` para integrar Python com ferramentas do sistema
+    operacional.
+-   Tratamento de erros, timeouts e estados intermediários.
+-   Elevação de privilégios administrativos no Windows.
+-   Testes unitários e de integração com `pytest`.
+-   Organização de um pacote Python instalável.
+-   Versionamento e evolução incremental com Git.
+
+O projeto conecta Python e fundamentos de administração de bancos de
+dados a problemas reais do ambiente de desenvolvimento local.
+
+## Contribuição e evolução
+
+O projeto está em desenvolvimento. Sugestões e relatos de comportamento
+em diferentes instalações do Windows podem ajudar a ampliar o catálogo e
+fortalecer o tratamento de falhas.
+
+------------------------------------------------------------------------
+
+**Local Database Manager** --- controle mais claro sobre os serviços de
+banco de dados do ambiente local.
